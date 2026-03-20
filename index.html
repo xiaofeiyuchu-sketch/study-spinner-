@@ -1,455 +1,72 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Study Spinner Pro</title>
-    <link id="manifest-link" rel="manifest">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23ff6b6b'/><path d='M0 0 L100 0 L0 100 Z' fill='%234ecdc4'/><line x1='100' y1='0' x2='0' y2='100' stroke='white' stroke-width='4'/></svg>">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="StudySpinner">
-    
-    <style>
-        :root {
-            --study-color: #4ecdc4;
-            --rest-color: #ff6b6b;
-            --bg-color: #f7f7f7;
-            --circle-size: clamp(300px, 45vh, 420px);
-            --reset-btn-size: 56px; /* 偶数にして計算を安定化 */
-        }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Study Spinner Pro</title>
+    <style>
+        :root { --study-color: #4ecdc4; --rest-color: #ff6b6b; --bg-color: #f7f7f7; --circle-size: clamp(300px, 45vh, 420px); }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: var(--bg-color); font-family: sans-serif; user-select: none; overflow: hidden; }
+        
+        /* ログパネル */
+        .log-panel { position: fixed; top: 20px; left: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; display: flex; gap: 15px; }
+        .stat-group { display: flex; flex-direction: column; }
+        .stat-label { font-size: 0.6rem; color: #999; font-weight: bold; }
+        .stat-val { font-size: 0.9rem; font-weight: bold; }
 
-        /* 全体設定 & タップ時の青い点滅を無効化 */
-        * {
-            -webkit-tap-highlight-color: transparent;
-            outline: none;
-            box-sizing: border-box;
-        }
+        /* タイマー本体 */
+        .wrapper { position: relative; width: var(--circle-size); height: var(--circle-size); }
+        .container { position: relative; width: 100%; height: 100%; cursor: pointer; transition: transform 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55); border-radius: 50%; border: 10px solid white; box-shadow: 0 15px 50px rgba(0,0,0,0.1); overflow: hidden; }
+        .half { position: absolute; width: 100%; height: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; }
+        .study { top: 0; background-color: var(--study-color); }
+        .rest { bottom: 0; background-color: var(--rest-color); transform: rotate(180deg); }
+        .label { font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; }
+        .time { font-size: 2.8rem; font-weight: bold; }
 
-        body {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; margin: 0; background-color: var(--bg-color);
-            font-family: 'Helvetica Neue', Arial, sans-serif; user-select: none;
-            touch-action: manipulation; overflow: hidden;
-        }
-
-        /* --- ログパネル --- */
-        .log-panel {
-            position: fixed; top: 25px; left: 25px; background: white;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex; align-items: center;
-            overflow: hidden; transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
-            max-width: 48px; height: 48px; z-index: 1000; cursor: pointer;
-            border: 1px solid #eee; border-radius: 12px;
-        }
-        .log-panel.open { max-width: 380px; }
-        .log-icon { min-width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.75rem; color: #333; }
-        .log-content { display: flex; padding: 0 18px; gap: 24px; white-space: nowrap; opacity: 0; transition: opacity 0.3s; }
-        .log-panel.open .log-content { opacity: 1; }
-        .stat-group { display: flex; flex-direction: column; justify-content: center; }
-        .stat-label { font-size: 0.6rem; color: #999; font-weight: bold; }
-        .stat-val { font-size: 0.95rem; font-weight: bold; color: #222; }
-
-        /* --- ToDoリスト --- */
-        .todo-sidebar {
-            position: fixed; top: 55px; left: -320px; width: 300px;
-            height: calc(100vh - 110px); background: white;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15); border-radius: 24px;
-            transition: left 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
-            z-index: 2000; display: flex; flex-direction: column;
-            padding: 30px 25px; border: 1px solid #eee;
-        }
-        .todo-sidebar.open { left: 25px; }
-        .todo-handle {
-            position: absolute; right: -35px; top: 50%; transform: translateY(-50%);
-            width: 35px; height: 70px; background: white; border-radius: 0 14px 14px 0;
-            box-shadow: 4px 0 10px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #eee; border-left: none;
-        }
-        .todo-handle::after { content: ""; width: 4px; height: 24px; background: #f0f0f0; border-radius: 2px; }
-        .todo-header { margin-bottom: 25px; }
-        .header-top { display: flex; justify-content: space-between; align-items: flex-start; }
-        #viewDateSelector { border: none; background: #f0f0f0; border-radius: 8px; font-size: 0.75rem; padding: 5px 8px; font-weight: bold; color: #444; cursor: pointer; }
-        .todo-date { font-size: 1.8rem; color: #222; font-weight: 900; display: block; line-height: 1.1; }
-        .todo-title { font-size: 0.85rem; color: var(--study-color); font-weight: bold; margin: 4px 0 0 2px; text-transform: uppercase; letter-spacing: 0.1em; }
-        .todo-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
-        .todo-item { display: flex; align-items: center; padding: 14px 0; border-bottom: 1px solid #f8f8f8; }
-        .todo-item input[type="checkbox"] { margin-right: 14px; width: 20px; height: 20px; accent-color: var(--study-color); cursor: pointer; }
-        .todo-item .todo-text-content { flex: 1; display: flex; flex-direction: column; cursor: pointer; }
-        .todo-item span { font-size: 1rem; color: #444; }
-        .todo-item small { font-size: 0.7rem; color: #aaa; margin-top: 2px; }
-        .todo-item.done span { text-decoration: line-through; color: #ccc; }
-        .add-todo-btn {
-            position: absolute; bottom: 25px; right: 25px; width: 50px; height: 50px; background: var(--study-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(78, 205, 196, 0.4); cursor: pointer; border: none; transition: transform 0.2s;
-        }
-        .add-todo-btn::before, .add-todo-btn::after { content: ""; position: absolute; background-color: white; border-radius: 2px; }
-        .add-todo-btn::before { width: 18px; height: 3px; }
-        .add-todo-btn::after { width: 3px; height: 18px; }
-
-        /* --- カウントダウン --- */
-        .target-calendar {
-            position: fixed; bottom: 25px; right: 25px;
-            background: white; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            border-radius: 12px; overflow: hidden;
-            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
-            width: 140px; height: 60px; cursor: pointer;
-            border-left: 8px solid var(--rest-color); z-index: 1000;
-        }
-        .target-calendar.open { width: 300px; height: 100px; }
-        .cal-body { display: flex; align-items: center; width: 100%; height: 100%; padding: 0 12px; position: relative; }
-        .cal-closed-view { display: flex; align-items: baseline; gap: 6px; width: 100%; justify-content: center; }
-        .target-calendar.open .cal-closed-view { display: none; }
-        .cal-open-view { display: none; width: 100%; align-items: center; }
-        .target-calendar.open .cal-open-view { display: flex; }
-        .cal-left { flex-shrink: 0; text-align: center; padding-right: 15px; border-right: 1px solid #eee; min-width: 70px; }
-        .cal-right { flex-grow: 1; padding-left: 15px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
-        .cal-days { font-size: 2.2rem; font-weight: 900; color: #222; line-height: 1; }
-        .cal-days.urgent { color: var(--rest-color); }
-        .cal-unit { font-size: 0.6rem; color: #bbb; font-weight: bold; }
-        .info-row { display: flex; align-items: center; gap: 8px; width: 100%; }
-        .info-label { font-size: 0.55rem; color: #ccc; font-weight: bold; width: 35px; flex-shrink: 0; }
-        #targetDateLabel { font-size: 0.8rem; color: #888; font-weight: bold; }
-        #targetTitle { border: none; background: transparent; color: #444; font-family: inherit; font-size: 0.85rem; font-weight: 900; width: 100%; outline: none; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cal-settings-btn { position: absolute; right: 8px; bottom: 8px; width: 18px; height: 18px; opacity: 0.2; cursor: pointer; display: none; }
-        .target-calendar.open .cal-settings-btn { display: block; }
-        .cal-settings-btn input[type="date"] { position: absolute; top: 0; left: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
-
-        /* --- モーダル --- */
-        #taskModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; align-items: center; justify-content: center; }
-        .modal-content { background: white; padding: 25px; border-radius: 20px; width: 85%; max-width: 340px; }
-        .modal-content h3 { margin: 0 0 15px 0; font-size: 1.1rem; }
-        .modal-content input[type="text"] { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; }
-        .repeat-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .everyday-btn { font-size: 0.7rem; padding: 4px 10px; border: 1px solid #ddd; border-radius: 12px; background: #fff; cursor: pointer; color: #666; }
-        .everyday-btn.active { background: #444; color: #fff; border-color: #444; }
-        .day-selector { display: flex; justify-content: space-between; margin: 5px 0 20px; }
-        .day-btn { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #ddd; background: #fff; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .day-btn.active { background: var(--study-color); color: white; border-color: var(--study-color); }
-        .modal-btns { display: flex; gap: 10px; }
-        .modal-btns button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .save-btn { background: var(--study-color); color: white; }
-        .cancel-btn { background: #eee; color: #666; }
-
-        /* --- タイマー本体 --- */
-        .wrapper { position: relative; width: var(--circle-size); height: var(--circle-size); }
-        .container { position: relative; width: 100%; height: 100%; cursor: pointer; transition: transform 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
-        .circle { position: absolute; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; box-shadow: 0 15px 50px rgba(0,0,0,0.1); border: 10px solid white; }
-        .half.study { position: absolute; top: 0; width: 100%; height: 50%; background-color: var(--study-color); display: flex; align-items: center; justify-content: center; color: white; flex-direction: column; }
-        .half.rest { position: absolute; bottom: 0; width: 100%; height: 50%; background-color: var(--rest-color); display: flex; align-items: center; justify-content: center; color: white; flex-direction: column; transform: rotate(180deg); }
-        .label { font-size: 0.9rem; font-weight: bold; margin-bottom: 6px; letter-spacing: 0.1em; }
-        .time { font-size: 2.8rem; font-weight: bold; font-variant-numeric: tabular-nums; }
-
-        /* --- リセットボタン（ズレ修正版） --- */
-        .reset-btn {
-            position: absolute; bottom: -30px; right: -30px;
-            width: var(--reset-btn-size); height: var(--reset-btn-size);
-            border-radius: 50%; border: none; background: white;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.1); cursor: pointer;
-            display: flex; align-items: center; justify-content: center; z-index: 100;
-            padding: 0; margin: 0;
-        }
-        .progress-ring {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%) rotate(-90deg);
-            width: calc(var(--reset-btn-size) + 10px);
-            height: calc(var(--reset-btn-size) + 10px);
-            pointer-events: none;
-        }
-        .progress-ring__circle {
-            stroke: var(--rest-color);
-            stroke-width: 4;
-            fill: transparent;
-            /* 周長 = 2 * π * r (r=30) ≈ 188.5 */
-            stroke-dasharray: 188.5;
-            stroke-dashoffset: 188.5;
-            transition: stroke-dashoffset 0.6s linear;
-            stroke-linecap: round;
-        }
-        .reset-btn.pressing .progress-ring__circle { stroke-dashoffset: 0; }
-        .reset-btn svg.icon { width: 28px; height: 28px; fill: #bbb; position: relative; z-index: 2; }
-    </style>
+        /* タスクなどは一旦非表示（崩れ防止のため） */
+        #taskModal, .todo-sidebar { display: none; }
+    </style>
 </head>
 <body>
 
-    <div id="taskModal">
-        <div class="modal-content">
-            <h3 id="modalTitle">タスク設定</h3>
-            <input type="text" id="modalInput" placeholder="タスク名を入力">
-            <div class="repeat-label-row">
-                <label style="font-size:0.8rem; color:#888;">繰り返し（曜日）</label>
-                <button class="everyday-btn" id="everydayToggle">毎日</button>
-            </div>
-            <div class="day-selector" id="daySelector">
-                <button class="day-btn" data-day="1">月</button>
-                <button class="day-btn" data-day="2">火</button>
-                <button class="day-btn" data-day="3">水</button>
-                <button class="day-btn" data-day="4">木</button>
-                <button class="day-btn" data-day="5">金</button>
-                <button class="day-btn" data-day="6">土</button>
-                <button class="day-btn" data-day="0">日</button>
-            </div>
-            <div class="modal-btns">
-                <button class="cancel-btn" onclick="closeModal()">キャンセル</button>
-                <button class="save-btn" onclick="saveTask()">保存</button>
-            </div>
-        </div>
-    </div>
+    <div class="log-panel">
+        <div class="stat-group"><span class="stat-label">TODAY</span><span id="dayLog" class="stat-val">0h 0m</span></div>
+        <div class="stat-group"><span class="stat-label">WEEK</span><span id="weekLog" class="stat-val">0h 0m</span></div>
+    </div>
 
-    <div class="log-panel" id="logPanel">
-        <div class="log-icon">LOG</div>
-        <div class="log-content">
-            <div class="stat-group"><span class="stat-label">TODAY</span><span id="dayLog" class="stat-val">0h 0m</span></div>
-            <div class="stat-group"><span class="stat-label">WEEK</span><span id="weekLog" class="stat-val">0h 0m</span></div>
-            <div class="stat-group"><span class="stat-label">MONTH</span><span id="monthLog" class="stat-val">0h 0m</span></div>
-        </div>
-    </div>
+    <div class="wrapper">
+        <div class="container" id="mainCircle" onclick="toggleMode()">
+            <div class="half study">
+                <div class="label">STUDY</div>
+                <div id="studyTime" class="time">00:00:00</div>
+            </div>
+            <div class="half rest">
+                <div class="label">REST</div>
+                <div id="restTime" class="time">00:00:00</div>
+            </div>
+        </div>
+    </div>
 
-    <div class="todo-sidebar" id="todoSidebar">
-        <div class="todo-handle" id="todoHandle"></div>
-        <div class="todo-header">
-            <div class="header-top">
-                <span class="todo-date" id="currentDateDisplay"></span>
-                <input type="date" id="viewDateSelector">
-            </div>
-            <div class="todo-title">Tasks Plan</div>
-        </div>
-        <ul class="todo-list" id="todoList"></ul>
-        <button class="add-todo-btn" onclick="openModalForAdd()"></button>
-    </div>
-
-    <div class="wrapper">
-        <div class="container" id="mainCircle">
-            <div class="circle">
-                <div class="half study"><div class="label">STUDY</div><div id="studyTime" class="time">00:00:00</div></div>
-                <div class="half rest"><div class="label">REST</div><div id="restTime" class="time">00:00:00</div></div>
-            </div>
-        </div>
-        <button id="resetBtn" class="reset-btn">
-            <svg class="progress-ring" viewBox="0 0 65 65">
-                <circle class="progress-ring__circle" cx="32.5" cy="32.5" r="30"></circle>
-            </svg>
-            <svg class="icon" viewBox="0 0 24 24"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg>
-        </button>
-    </div>
-
-    <div class="target-calendar" id="targetCalendar">
-        <div class="cal-body">
-            <div class="cal-closed-view">
-                <span class="cal-days closed-days">--</span>
-                <span class="cal-unit">DAYS LEFT</span>
-            </div>
-            <div class="cal-open-view">
-                <div class="cal-left">
-                    <span class="cal-days open-days">--</span>
-                    <div class="cal-unit">DAYS</div>
-                </div>
-                <div class="cal-right">
-                    <div class="info-row"><span class="info-label">DATE</span><span id="targetDateLabel">----/--/--</span></div>
-                    <div class="info-row"><span class="info-label">TITLE</span><input type="text" id="targetTitle" maxlength="30" onkeydown="if(event.key==='Enter') this.blur();"></div>
-                </div>
-            </div>
-            <div class="cal-settings-btn" id="calSettingsBtn">
-                <input type="date" id="targetDateInput">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-            </div>
-        </div>
-    </div>
-
-    <script id="sw-code" type="text/javascript">
-        self.addEventListener('install', e => self.skipWaiting());
-        self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
-    </script>
-
-    <script>
-        const getLocalDateKey = (date = new Date()) => {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        };
-
-        // PWA初期化
-        (function setupPWA() {
-            const manifest = {
-                "name": "Study Spinner Pro", "short_name": "StudySpinner", "start_url": ".", "display": "standalone",
-                "background_color": "#f7f7f7", "theme_color": "#4ecdc4",
-                "icons": [{"src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23ff6b6b'/><path d='M0 0 L100 0 L0 100 Z' fill='%234ecdc4'/><line x1='100' y1='0' x2='0' y2='100' stroke='white' stroke-width='4'/></svg>", "sizes": "192x192", "type": "image/svg+xml"}]
-            };
-            const blobManifest = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-            document.getElementById('manifest-link').setAttribute('href', URL.createObjectURL(blobManifest));
-            if ('serviceWorker' in navigator) {
-                const swText = document.getElementById('sw-code').textContent;
-                const blobSW = new Blob([swText], {type: 'text/javascript'});
-                navigator.serviceWorker.register(URL.createObjectURL(blobSW)).catch(console.error);
-            }
-        })();
-
-        // 状態
-        let studyLog = JSON.parse(localStorage.getItem('studyLog')) || {};
-        let accumulatedRestTime = 0;
-        let startTime = null, isStudyMode = true, timerInterval = null, currentRotation = 0;
-        let lastAutoSaveTime = 0;
-        let todos = JSON.parse(localStorage.getItem('todos')) || [];
-        let editingIndex = null;
-        let targetDate = localStorage.getItem('targetDate') || "";
-        let savedTargetLabel = localStorage.getItem('targetLabel') || "X-DAY";
-        const dayMap = ["日", "月", "火", "水", "木", "金", "土"];
-        let selectedViewDate = getLocalDateKey();
-
-        function commitStudyTime(ms) {
-            if (ms <= 0) return;
-            const key = getLocalDateKey();
-            studyLog[key] = (Number(studyLog[key]) || 0) + ms;
-            localStorage.setItem('studyLog', JSON.stringify(studyLog));
-            updateLogDisplay();
-        }
-
-        function formatTime(ms) { 
-            const s = Math.max(0, Math.floor((Number(ms) || 0)/1000)); 
-            return `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; 
-        }
-        function formatLogTime(ms) { 
-            const totalMin = Math.floor((Number(ms) || 0)/60000); 
-            return `${Math.floor(totalMin/60)}h ${totalMin%60}m`; 
-        }
-
-        function updateLogDisplay() {
-            const now = new Date();
-            const todayKey = getLocalDateKey(now);
-            document.getElementById('dayLog').textContent = formatLogTime(studyLog[todayKey] || 0);
-
-            let weekTotal = 0;
-            const currentDay = now.getDay(); 
-            const diffToMonday = (currentDay === 0) ? 6 : currentDay - 1;
-            for(let i=0; i<=diffToMonday; i++){
-                const d = new Date(now); d.setDate(now.getDate() - i);
-                const k = getLocalDateKey(d);
-                weekTotal += (Number(studyLog[k]) || 0);
-            }
-            document.getElementById('weekLog').textContent = formatLogTime(weekTotal);
-            
-            let monthTotal = 0;
-            const prefix = todayKey.substring(0, 7);
-            Object.keys(studyLog).forEach(k => { if(k.startsWith(prefix)) monthTotal += (Number(studyLog[k]) || 0); });
-            document.getElementById('monthLog').textContent = formatLogTime(monthTotal);
-        }
-
-        function toggleMode() {
-            const now = Date.now();
-            if(startTime !== null) {
-                const diff = now - startTime;
-                if(isStudyMode) commitStudyTime(diff);
-                else accumulatedRestTime += diff;
-            }
-            isStudyMode = !isStudyMode;
-            startTime = now;
-            lastAutoSaveTime = now;
-            currentRotation += 180;
-            document.getElementById('mainCircle').style.transform = `rotate(${currentRotation}deg)`;
-            
-            if(!timerInterval) {
-                timerInterval = setInterval(() => {
-                    const currentTime = Date.now();
-                    const diff = currentTime - startTime;
-                    if (isStudyMode) {
-                        document.getElementById('studyTime').textContent = formatTime(diff);
-                        if (currentTime - lastAutoSaveTime >= 10000) {
-                            commitStudyTime(currentTime - lastAutoSaveTime);
-                            lastAutoSaveTime = currentTime;
-                            startTime = currentTime; 
-                        }
-                    } else {
-                        document.getElementById('restTime').textContent = formatTime(accumulatedRestTime + diff);
-                    }
-                }, 100);
-            }
-        }
-
-        function resetTimers() {
-            if(startTime && isStudyMode) commitStudyTime(Date.now() - startTime);
-            clearInterval(timerInterval); timerInterval = null; startTime = null;
-            accumulatedRestTime = 0; isStudyMode = true; currentRotation = 0;
-            document.getElementById('studyTime').textContent = "00:00:00";
-            document.getElementById('restTime').textContent = "00:00:00";
-            document.getElementById('mainCircle').style.transform = `rotate(0deg)`;
-            updateLogDisplay();
-        }
-
-        function renderTodos() {
-            const list = document.getElementById('todoList');
-            list.innerHTML = '';
-            const viewDateObj = new Date(selectedViewDate);
-            const viewDayIdx = viewDateObj.getDay().toString();
-            document.getElementById('currentDateDisplay').textContent = `${viewDateObj.getMonth() + 1}/${viewDateObj.getDate()} ${["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][viewDateObj.getDay()]}`;
-            todos.filter(t => (t.date === selectedViewDate) || (t.repeatDays && t.repeatDays.includes(viewDayIdx)))
-                 .forEach((todo) => {
-                    const realIndex = todos.indexOf(todo);
-                    const isDone = todo.doneDates && todo.doneDates.includes(selectedViewDate);
-                    const li = document.createElement('li');
-                    li.className = `todo-item ${isDone ? 'done' : ''}`;
-                    li.innerHTML = `
-                        <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTodo(${realIndex}, '${selectedViewDate}')">
-                        <div class="todo-text-content" onclick="openModalForEdit(${realIndex})">
-                            <span>${todo.text}</span>
-                            ${todo.repeatDays?.length ? `<small>${todo.repeatDays.length===7?'毎日':todo.repeatDays.sort().map(d=>dayMap[d]).join('')}</small>` : ''}
-                        </div>
-                        <button onclick="deleteTodo(event, ${realIndex})" style="border:none; background:none; color:#ddd; cursor:pointer; font-size: 1.2rem; padding: 10px;">×</button>
-                    `;
-                    list.appendChild(li);
-                });
-            localStorage.setItem('todos', JSON.stringify(todos));
-        }
-
-        window.toggleTodo = (idx, d) => {
-            if(!todos[idx].doneDates) todos[idx].doneDates = [];
-            const pos = todos[idx].doneDates.indexOf(d);
-            if(pos > -1) todos[idx].doneDates.splice(pos,1); else todos[idx].doneDates.push(d);
-            renderTodos();
-        };
-
-        function updateTargetUI() {
-            const closedDays = document.querySelector('.closed-days');
-            const openDays = document.querySelector('.open-days');
-            const dateLabel = document.getElementById('targetDateLabel');
-            if (!targetDate) { closedDays.textContent = "--"; openDays.textContent = "--"; dateLabel.textContent = "----/--/--"; return; }
-            const target = new Date(targetDate); target.setHours(0,0,0,0);
-            const today = new Date(); today.setHours(0,0,0,0);
-            const diff = Math.ceil((target - today) / 86400000);
-            const val = diff >= 0 ? diff : 0;
-            [closedDays, openDays].forEach(el => { el.textContent = val; el.classList.toggle('urgent', val <= 7); });
-            dateLabel.textContent = `${target.getFullYear()}/${target.getMonth()+1}/${target.getDate()}`;
-        }
-
-        const dayButtons = document.querySelectorAll('.day-btn');
-        function openModalForAdd() { editingIndex = null; document.getElementById('modalTitle').textContent="新規タスク"; document.getElementById('modalInput').value=""; dayButtons.forEach(b=>b.classList.remove('active')); document.getElementById('taskModal').style.display='flex'; }
-        function openModalForEdit(i) { editingIndex = i; const t = todos[i]; document.getElementById('modalTitle').textContent="タスク編集"; document.getElementById('modalInput').value=t.text; dayButtons.forEach(b=>b.classList.toggle('active', t.repeatDays?.includes(b.dataset.day))); document.getElementById('taskModal').style.display='flex'; }
-        function closeModal() { document.getElementById('taskModal').style.display='none'; }
-        function saveTask() {
-            const text = document.getElementById('modalInput').value.trim();
-            const days = Array.from(dayButtons).filter(b=>b.classList.contains('active')).map(b=>b.dataset.day);
-            if(!text) return;
-            if(editingIndex!==null) todos[editingIndex] = {...todos[editingIndex], text, repeatDays:days};
-            else todos.push({text, doneDates:[], repeatDays:days, date:selectedViewDate});
-            renderTodos(); closeModal();
-        }
-        window.deleteTodo = (e, i) => { e.stopPropagation(); todos.splice(i,1); renderTodos(); };
-
-        document.getElementById('mainCircle').onclick = toggleMode;
-        document.getElementById('todoHandle').onclick = () => document.getElementById('todoSidebar').classList.toggle('open');
-        document.getElementById('logPanel').onclick = () => { document.getElementById('logPanel').classList.toggle('open'); updateLogDisplay(); };
-        document.getElementById('viewDateSelector').addEventListener('change', (e)=>{ selectedViewDate = e.target.value; renderTodos(); });
-        document.getElementById('targetTitle').oninput = (e) => localStorage.setItem('targetLabel', e.target.value);
-        document.getElementById('targetDateInput').onchange = (e) => { targetDate = e.target.value; localStorage.setItem('targetDate', targetDate); updateTargetUI(); };
-        document.getElementById('targetCalendar').onclick = (e) => { if(!e.target.closest('#calSettingsBtn') && e.target.id!=='targetTitle') document.getElementById('targetCalendar').classList.toggle('open'); };
-        dayButtons.forEach(b => b.onclick = () => b.classList.toggle('active'));
-        document.getElementById('everydayToggle').onclick = () => { const all = Array.from(dayButtons).every(b=>b.classList.contains('active')); dayButtons.forEach(b => b.classList.toggle('active', !all)); };
-
-        const rBtn = document.getElementById('resetBtn'); let lp;
-        rBtn.onmousedown = rBtn.ontouchstart = (e) => { rBtn.classList.add('pressing'); lp = setTimeout(() => { resetTimers(); rBtn.classList.remove('pressing'); }, 600); };
-        rBtn.onmouseup = rBtn.onmouseleave = rBtn.ontouchend = () => { clearTimeout(lp); rBtn.classList.remove('pressing'); };
-
-        document.getElementById('targetTitle').value = savedTargetLabel;
-        document.getElementById('viewDateSelector').value = selectedViewDate;
-        updateTargetUI(); updateLogDisplay(); renderTodos();
-    </script>
+    <script>
+        let startTime = null, isStudyMode = true, currentRotation = 0, timerInterval = null;
+        function toggleMode() {
+            isStudyMode = !isStudyMode;
+            currentRotation += 180;
+            document.getElementById('mainCircle').style.transform = `rotate(${currentRotation}deg)`;
+            if (!startTime) startTime = Date.now();
+            if (!timerInterval) {
+                timerInterval = setInterval(() => {
+                    const diff = Math.floor((Date.now() - startTime) / 1000);
+                    const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+                    const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+                    const s = String(diff % 60).padStart(2, '0');
+                    const timeStr = `${h}:${m}:${s}`;
+                    if (isStudyMode) document.getElementById('studyTime').textContent = timeStr;
+                    else document.getElementById('restTime').textContent = timeStr;
+                }, 1000);
+            }
+        }
+    </script>
 </body>
 </html>
